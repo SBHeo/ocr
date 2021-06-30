@@ -1,4 +1,4 @@
-import sys
+import sys, os
 
 def read_data(file):
     data = list()
@@ -9,7 +9,6 @@ def read_data(file):
             if line == '':
                 break
             raw = list(line.split('\t'))
-            #tmp = raw[:1] + list(map(int, raw[1:]))
             tmp = list()
             for i in range(1, 9, 2):
                 tmp.append(list(map(int, raw[i:i+2])))
@@ -18,18 +17,22 @@ def read_data(file):
     return data
 
 def coordinate_sort(temp):
-    temp = list(sorted(temp, key=lambda x: x[1]))
-    temp = list(sorted(temp[:2], key=lambda x: x[0])) + list(sorted(temp[2:], key=lambda x: -x[0]))
-    return temp
-    
-#정렬된 bounding box 데이터를 출력 포맷에 맞춰 파일에 write한다.
+    temp = list(sorted(temp, key=lambda x: x[0]))
+    front = list(sorted(temp[:2], key=lambda x: x[1]))
+    back = list(sorted(temp[2:], key=lambda x: x[1]))
+    return front[:1] + back + front[1:]
+
 def write_data(file, lines):
-    with open('./output/{}.txt'.format(file), mode='wt', encoding='utf-8') as w:
+    try:
+        if not os.path.exists('./output1'):
+            os.makedirs('./output1')
+    except OSError:
+        print('Error: Creating Directory.')
+    with open('./output1/{}.txt'.format(file), mode='wt', encoding='utf-8') as w:
         i = 0
         for line in lines:
             i += 1
             string = ''
-            line.sort(key=lambda x:x[1][0])
             for x in line:
                 string += ' ' + x[0]
             r = "Line #{}:".format(i) + string + ", "
@@ -37,8 +40,8 @@ def write_data(file, lines):
             w.write(r)
 
 #기울기 고려
-def compare_box(start, next):
-    variation = 30
+def compare(start, next):
+    variation = 25
     #윗변
     x1, y1, x2, y2 = start[1][0], start[1][1], start[2][0], start[2][1]
     nx1, ny1, nx2, ny2 = next[1][0], next[1][1], next[4][0], next[4][1]
@@ -49,7 +52,7 @@ def compare_box(start, next):
             na = (ny2 - ny1) / (nx2 - nx1)
             nb = ny1 - na * nx1
             #두 일차함수의 교차점 계산
-            cx = (b - nb) / (a - na)
+            cx = (nb - b) / (a - na)
             cy = a * cx + b
         else:
             cx = nx1
@@ -64,34 +67,16 @@ def compare_box(start, next):
             na = (ny2 - ny1) / (nx2 - nx1)
             nb = ny1 - na * nx1
             #두 일차함수의 교차점 계산
-            cx = (b - nb) / (a - na)
+            try:
+                cx = (nb - b) / (a - na)
+            except:
+                print(start, next)
             cy = a * cx + b
         else:
-            cx = nx1
+            cx = nx2
             cy = a * cx + b
         bottom = ((nx2 - cx) ** 2 + (ny2 - cy) ** 2)**0.5
-    
     if up < variation and bottom < variation:
-        return True
-    else:
-        return False
-
-#데이터의 위쪽이 항상 상단일 경우
-def compare_box_1(start, next):
-    variation = 15
-    sx1, sy1, sx2, sy2 = start[2][0], start[2][1], start[3][0], start[3][1]
-    nx1, ny1, nx2, ny2 = next[1][0], next[1][1], next[4][0], next[4][1]
-
-    if sy1 > ny1:
-        up = sy1 - ny1
-    else:
-        up = ny1 - sy1
-    if sy2 > ny2:
-        bottom = sy2 - ny2
-    else:
-        bottom = ny2 - sy2
-    
-    if up <= variation and bottom <= variation:
         return True
     else:
         return False
@@ -100,18 +85,28 @@ def main(input, output):
     #1 - 좌측 상단, 2 - 우측 상단, 3 - 우측 하단, 4 - 좌측 하단
     #['string', [x1, y1], [x2, y2], [x3, y3], [x4, y4]]
     data = read_data(input)
-    data.sort(key=lambda x: (x[1][1], x[1][0]))
-    lines = list()
-    line = [data[0]]
-    for i in range(1, len(data)):
-        if compare_box(data[i-1], data[i]):
-            line.append(data[i])
+        
+    lines = []
+    for d in data:
+        if not lines:
+            lines.append([d])
         else:
-            lines.append(line)
-            line = [data[i]]
-    lines.append(line)
+            check = False
+            for i in range(len(lines)):
+                if compare(lines[i][0], d):
+                    check = True
+                    break;
+            if check:
+                lines[i].append(d)
+            else:
+                lines.append([d])
+    
+    for i in range(len(lines)):
+        lines[i].sort(key=lambda x: x[1][0])
+    lines.sort(key=lambda x: x[0][1][1])
 
     write_data(output, lines)
+
 
 if __name__ == '__main__':
     #input 데이터와 output 파일의 번호를 입력받는다.
